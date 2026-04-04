@@ -1,0 +1,8 @@
+pandas==3.0.1
+psycopg2==2.9.11
+sqlalchemy==2.0.48
+requests==2.32.5
+py-countries-states-cities-database==2.2.10
+countrystatecity-countries==1.0.2
+pycountry==26.2.16
+requests ==2.32.5
