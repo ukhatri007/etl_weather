@@ -46,3 +46,17 @@
 #     country_details = get_country_details()
 #     cities_df = get_cities(country_details)
 #     # load_cities_to_postgres(df=cities_df)
+
+
+import pandas as pd
+
+
+df = pd.DataFrame({
+    'int_col': [1, 2, 3],
+    'float_col': [1.1, 2.2, 3.3],
+    'str_col': ['a', 'b', 'c'],
+    'bool_col': [True, False, True],
+    'date_col': pd.to_datetime(['2020-01-01', '2020-01-02', '2020-01-03']),
+    'category_col': pd.Categorical(['A', 'B', 'A']),
+
+})
