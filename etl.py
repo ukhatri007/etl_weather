@@ -120,7 +120,7 @@ def get_lat_long()->pd.DataFrame:
                 select
                     latitude,
                     longitude 
-                from weather_schema.city_list limit 1000;
+                from weather_schema.city_list;
             """
     df = get_dataframe_from_postgres(query=query)
     return df
@@ -172,10 +172,13 @@ def check_data_types(df):
     return df
 
 def traform_data(df):
-    df= df.drop_duplicates()
+    
     df= df.copy()
     df["unique_key"] = df.apply(make_hash, axis=1)
+    df = df.drop_duplicates(subset=["unique_key"])
     df["_record_loaded_at"] = datetime.now()
+    df["rain"] = None
+    df["snow"] = None   
 
     return df
 
@@ -214,79 +217,71 @@ def merge_data(conn):
             using weather_schema.temp_table as s 
             on t.unique_key = s.unique_key
                           
-            when matched and 
-	            (t.coord, t.weather, t.main, t.dt, t.base, t.name, t.visibility, t.wind, t.clouds, t.sys, t.timezone, t.rain, t.cod ) 
-                is distinct from
-	            (s.coord, s.weather, s.main, s.dt, s.base, s.name, s.visibility, s.wind, s.clouds, s.sys, s.timezone, s.rain, s.cod )
-	                then
-		            update set
-                        id = s.id,
-                        coord = s.coord,
-                        weather = s.weather,
-                        main = s.main,
-                        dt = s.dt,
-                        base = s.base,
-                        name = s.name,
-                        visibility = s.visibility,
-                        wind = s.wind,
-                        clouds = s.clouds,
-                        sys = s.sys,
-                        timezone = s.timezone,
-                        rain = s.rain,
-                        cod = s.cod,
-                        _record_loaded_at = now()
+                when matched and 
+	                (t.coord, t.weather, t.main, t.dt, t.base, t.name, t.visibility, t.wind, t.clouds, t.sys, t.timezone, t.rain, t.cod, t.id, t.snow) 
+                    is distinct from
+	                (s.coord, s.weather, s.main, s.dt, s.base, s.name, s.visibility, s.wind, s.clouds, s.sys, s.timezone, s.rain, s.cod, s.id, s.snow) 
+	                    then
+		                    update set
+                                unique_key = s.unique_key,
+                                id = s.id,
+                                coord = s.coord,
+                                weather = s.weather,
+                                main = s.main,
+                                dt = s.dt,
+                                base = s.base,
+                                name = s.name,
+                                snow = s.snow,
+                                visibility = s.visibility,
+                                wind = s.wind,
+                                clouds = s.clouds,
+                                sys = s.sys,
+                                timezone = s.timezone,
+                                rain = s.rain,
+                                cod = s.cod,
+                                _record_loaded_at = now(),
+                                status = 'update'
                         
         
-            when not matched then
-	            insert(unique_key,coord, weather, main, dt, base, name, visibility, wind, clouds, sys, timezone, rain, cod,id, _record_loaded_at)
-	            values(s.unique_key, s.coord, s.weather, s.main, s.dt, s.base, s.name, s.visibility, s.wind, s.clouds, s.sys, s.timezone, s.rain, s.cod, s.id, now())
+                when not matched then
+	                insert(unique_key, coord, weather, main, dt, base, name, visibility, wind, clouds, sys, timezone, rain, snow, cod,id, _record_loaded_at, status)
+	                values( s.unique_key, s.coord, s.weather, s.main, s.dt, s.base, s.name, s.visibility, s.wind, s.clouds, s.sys, s.timezone, s.rain, s.snow, s.cod, s.id, now(), 'insert')
     """))
    
     return response
 
-
-
-def check_table_exists(engine):
-    """--checks if schema and table exist in postgraces--
-        Args: engine/connection
-
-        Return: boolean value
-    """
-    with engine.begin() as conn: 
-        result=conn.execute(text(""" 
-                select 
-                    case
-                        when count(1) = 1
-                        then true
-                        else false
-                    end as is_table
-                from information_schema."tables" t
-                where t.table_catalog = 'weather_db'
-                and t.table_schema = 'weather_schema'
-                and t.table_name = 'weather_data';
-"""))
-        return result
     
 def check_table_exists(engine):
     """checks if table exits then delete the table--
         Args: engine/connection 
         Return: None"""
     with engine.begin() as conn:
-        result=conn.execute(text("""
+        weather_data=conn.execute(text("""
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'weather_schema'
+              AND table_name = 'weather_data'
+        );                        
+    """)).scalar()
+    
+        temp_table=conn.execute(text("""
         SELECT EXISTS (
             SELECT 1
             FROM information_schema.tables
             WHERE table_schema = 'weather_schema'
               AND table_name = 'temp_table'
-        );
-    """))
-    return result
+        );                        
+    """)).scalar()
+        
+    
+        return weather_data,temp_table
     
 
 def delete_table(engine):
-    result=check_table_exists(engine)
+    temp_table=check_table_exists(engine)
         
-    if result.scalar():
+    if temp_table:
         with engine.begin() as conn:
             conn.execute(text("""
             DROP TABLE  weather_schema.temp_table
@@ -304,22 +299,22 @@ if __name__ == "__main__":
     # load_dataframe_to_postgres(city_name, "city_list", "replace")
     df_lat_lon = get_lat_long()
     url = api_url(df=df_lat_lon)
+    # print(url)
     with ThreadPoolExecutor(max_workers=9) as executor:
-        for chunk in chunk_url(ll_url=url, size=900):
+        for chunk in chunk_url(ll_url=url, size=495):
             results = executor.map(fetch, chunk)
             data = list(results)
             df = pd.DataFrame(data)
             df = check_data_types(df=df)
             df = pd.DataFrame(df)
             df=traform_data(df=df)
-            value=check_table_exists(engine=ENGINE)
-            result = value.fetchall()
-            bool_value=result[0][0]
-            if bool_value:
+            weather_data,temp_table=check_table_exists(engine=ENGINE)
+            if weather_data:
                 load_dataframe_to_postgres(df, "temp_table", "replace")
                 merge_data(conn=ENGINE)               
             else:
-                load_dataframe_to_postgres(df, "weather_data", "replace")
+                load_dataframe_to_postgres(df, "weather_data", "append")
+            
             
             delete_table(engine=ENGINE)
             
