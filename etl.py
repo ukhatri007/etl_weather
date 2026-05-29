@@ -1,50 +1,27 @@
 import json
 import hashlib
-from unittest import result
-from sqlalchemy import inspect
 from datetime import datetime
 import requests
 import pandas as pd
-from sqlalchemy import create_engine,text
+from sqlalchemy import text
 from countrystatecity_countries import get_cities_of_country, get_countries
 from concurrent.futures import ThreadPoolExecutor
 import random
-import orchestration_utils
+from utilities import PostgresConnection,PostgresOperation,PostgresDestination
 
 
-# Database Connection
-ENGINE = create_engine("postgresql://ujjwolkhatri:password@localhost:5432/weather_db")
 
 
-# ETL
-def countries_detail() -> list[dict]:
-    """
-    --Give the detail of country listed in iso standard--
-        Args: none
 
-        Return:
-        [{ "country_name": str, "iso2": str }]
-    """
+def cities_detail():
     country = get_countries()
     country_detail = [
         {"country_name": country.name, "iso2": country.iso2} for country in country
     ]
-    return country_detail
-
-# ETL
-def cityname(country_detail) -> pd.DataFrame:
-    """
-    --Provides cities details of all countries--
-
-        Args: [{ "country_name": str, "iso2": str }]
-
-        Return:
-        [{"id","iso2","country","city","latitude","longitude"}]
-
-    """
     city_full_list = []
     for cn in country_detail:
         city_all_name = get_cities_of_country(cn["iso2"])
+        
         for city in city_all_name:
             city_full_list.append(
                 {
@@ -56,13 +33,11 @@ def cityname(country_detail) -> pd.DataFrame:
                     "longitude": city.longitude
                 }
             )
-
-    df = pd.DataFrame(city_full_list)
-    return df
-
+    city_full_list = pd.DataFrame(city_full_list)    
+    return city_full_list
 
 # ETL
-def get_dataframe_from_postgres(query) -> pd.DataFrame:
+def get_dataframe_from_postgres() -> pd.DataFrame:
     """
     --fetch latitude and longituded from postgres--
         Args: Query , Engine
@@ -74,56 +49,21 @@ def get_dataframe_from_postgres(query) -> pd.DataFrame:
 
 
     """
-    result_df = pd.read_sql(sql=query, con=ENGINE)
-    return result_df
+    pg_con = PostgresOperation(database='weather_db',user='ujjwolkhatri',password='password')
+    query = """
+                select
+                    latitude,
+                    longitude 
+                from weather_schema.city_list limit 2000;
+            """
+    df= pg_con.query_postgres(query_string=query)
+    return df
 
-
-# ETL
-def load_dataframe_to_postgres(dataframe: pd.DataFrame, table_name: str, if_exists: str = "append") -> int:
-    """
-    --Load dataframe to postgres--
-
-        Args: dataframe, table_name,if_exists
-
-        Return:load_response (int)
-
-    """
-    
-    load_response = dataframe.to_sql(
-        name=table_name,
-        con=ENGINE,
-        schema="weather_schema",
-        if_exists=if_exists,
-        index=False,
-    )
-    print(type(load_response))
-    return load_response
 
 # Helper
 def make_hash(row):
     value = f"{row['id']}|{row['coord']}"
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
-
-
-
-def get_lat_long()->pd.DataFrame:
-
-    """
-    --this function gets query and filter the value of postgres--
-
-        Args: none,query
-
-        Return: dataframe
-    """
-
-    query = """
-                select
-                    latitude,
-                    longitude 
-                from weather_schema.city_list;
-            """
-    df = get_dataframe_from_postgres(query=query)
-    return df
 
 
 def api_url(df) -> list[str]:
@@ -156,7 +96,6 @@ def api_url(df) -> list[str]:
     return suffel
 
 
-
 def check_data_types(df):
     """
     This function takes dataframe before loading into postgres
@@ -165,14 +104,17 @@ def check_data_types(df):
     """
     
     # print(type(df.columns))
+    df=df.copy()
     for col in df.columns:
-        # print(f"Column: {col}, Data Type: {df[col].dtype}")
-        if df[col].dtype == "object":
-                df[col] = df[col].apply(json.dumps)
+        df[col] = df[col].apply(
+            lambda x: json.dumps(x) if isinstance(x, (dict, list))
+            else x
+        )
+
     return df
 
+
 def traform_data(df):
-    
     df= df.copy()
     df["unique_key"] = df.apply(make_hash, axis=1)
     df = df.drop_duplicates(subset=["unique_key"])
@@ -188,7 +130,7 @@ def chunk_url(ll_url, size):
     --Generate the Urls in the chunk of list--
         Args:list_of_url,chunk_size
 
-        Generate:chunk of 500 urls
+        Generate:chunk of 495 urls
     """
     for i in range(0, len(ll_url), size):
         yield ll_url[i : i + size]
@@ -205,12 +147,13 @@ def fetch(url):
     return response
 
 # Database Operation
-def merge_data(conn):
+def merge_data():
     """--merge data from temp_table to weatehr_table--
         Args : connection/engine
-        
         Returns: none"""
+    pg_conn = PostgresConnection(database='weather_db',user='ujjwolkhatri',password='password')
 
+    conn =pg_conn.create_conn()
     with conn.begin() as conn:
        response= conn.execute(text("""
             merge into weather_schema.weather_data as t
@@ -249,73 +192,41 @@ def merge_data(conn):
     """))
    
     return response
-
-    
-def check_table_exists(engine):
-    """checks if table exits then delete the table--
-        Args: engine/connection 
-        Return: None"""
-    with engine.begin() as conn:
-        weather_data=conn.execute(text("""
-        SELECT EXISTS (
-            SELECT 1
-            FROM information_schema.tables
-            WHERE table_schema = 'weather_schema'
-              AND table_name = 'weather_data'
-        );                        
-    """)).scalar()
-    
-        temp_table=conn.execute(text("""
-        SELECT EXISTS (
-            SELECT 1
-            FROM information_schema.tables
-            WHERE table_schema = 'weather_schema'
-              AND table_name = 'temp_table'
-        );                        
-    """)).scalar()
-        
-    
-        return weather_data,temp_table
     
 
-def delete_table(engine):
-    temp_table=check_table_exists(engine)
-        
-    if temp_table:
-        with engine.begin() as conn:
-            conn.execute(text("""
-            DROP TABLE  weather_schema.temp_table
-            """))
+def load_country_city_to_postgres(df):
+    pg_conn = PostgresDestination(database='weather_db',user='ujjwolkhatri',password='password')
+    response = pg_conn.load_to_table(df=df,table_name='city_list',if_exists='replace')
+    return response
 
 
 if __name__ == "__main__":
    
-#    with ENGINE.begin() as conn:
-#     conn.execute(text("""
-#             DELETE FROM weather_schema.temp_table
-#         """))
-    # country_detail = countries_detail()
-    # city_name = cityname(country_detail)
-    # load_dataframe_to_postgres(city_name, "city_list", "replace")
-    df_lat_lon = get_lat_long()
-    url = api_url(df=df_lat_lon)
-    # print(url)
+    city_name_df=cities_detail()
+    load_country_city_to_postgres(df=city_name_df)
+    df= get_dataframe_from_postgres()  
+    url=api_url(df)
+
     with ThreadPoolExecutor(max_workers=9) as executor:
         for chunk in chunk_url(ll_url=url, size=495):
             results = executor.map(fetch, chunk)
             data = list(results)
             df = pd.DataFrame(data)
             df = check_data_types(df=df)
-            df = pd.DataFrame(df)
-            df=traform_data(df=df)
-            weather_data,temp_table=check_table_exists(engine=ENGINE)
-            if weather_data:
-                load_dataframe_to_postgres(df, "temp_table", "replace")
-                merge_data(conn=ENGINE)               
+            df = traform_data(df=df)
+            pg_conn = PostgresOperation(database='weather_db',user='ujjwolkhatri',password='password')
+            check_table = pg_conn.check_if_table_exists(table_name='weather_data',schema_name='weather_schema')
+            print(check_table)
+            if check_table:
+                pg_conn = PostgresDestination(database='weather_db',user='ujjwolkhatri',password='password')
+                pg_conn.load_to_table(df=df,table_name='temp_table',if_exists='replace')
+                merge_data()
             else:
-                load_dataframe_to_postgres(df, "weather_data", "append")
-            
-            
-            delete_table(engine=ENGINE)
-            
-            
+                pg_conn = PostgresDestination(database='weather_db',user='ujjwolkhatri',password='password')
+                pg_conn.load_to_table(df=df,table_name='weather_data',if_exists='replace')
+
+            pg_conn = PostgresOperation(database='weather_db',user='ujjwolkhatri',password='password')
+            pg_conn.delete_table(table_name='temp_table',schema_name='weather_schema')
+
+
+           
