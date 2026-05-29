@@ -214,19 +214,16 @@ if __name__ == "__main__":
             df = pd.DataFrame(data)
             df = check_data_types(df=df)
             df = traform_data(df=df)
-            pg_conn = PostgresOperation(database='weather_db',user='ujjwolkhatri',password='password')
-            check_table = pg_conn.check_if_table_exists(table_name='weather_data',schema_name='weather_schema')
-            print(check_table)
+            pg_connO = PostgresOperation(database='weather_db',user='ujjwolkhatri',password='password')
+            check_table = pg_connO.check_if_table_exists(table_name='weather_data',schema_name='weather_schema')
+            pg_connD = PostgresDestination(database='weather_db',user='ujjwolkhatri',password='password')
             if check_table:
-                pg_conn = PostgresDestination(database='weather_db',user='ujjwolkhatri',password='password')
-                pg_conn.load_to_table(df=df,table_name='temp_table',if_exists='replace')
+                pg_connD.load_to_table(df=df,table_name='temp_table',if_exists='replace')
                 merge_data()
             else:
-                pg_conn = PostgresDestination(database='weather_db',user='ujjwolkhatri',password='password')
-                pg_conn.load_to_table(df=df,table_name='weather_data',if_exists='replace')
+                pg_connD.load_to_table(df=df,table_name='weather_data',if_exists='replace')
 
-            pg_conn = PostgresOperation(database='weather_db',user='ujjwolkhatri',password='password')
-            pg_conn.delete_table(table_name='temp_table',schema_name='weather_schema')
+            pg_connO.delete_table(table_name='temp_table',schema_name='weather_schema')
 
 
            
