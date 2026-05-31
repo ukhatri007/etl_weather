@@ -1,8 +1,8 @@
-from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
 import hashlib
 import json
 import random
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 
 import pandas as pd
 import requests
@@ -11,12 +11,13 @@ from countrystatecity_countries import (
     get_countries,
 )
 from sqlalchemy import text
-
 from utilities import (
     PostgresConnection,
     PostgresDestination,
     PostgresOperation,
+    PostgresSource
 )
+
 
 def cities_detail():
     country = get_countries()
@@ -39,6 +40,8 @@ def cities_detail():
             )
     city_full_list = pd.DataFrame(city_full_list)    
     return city_full_list
+
+
 # ETL
 def get_dataframe_from_postgres() -> pd.DataFrame:
     """
@@ -49,7 +52,7 @@ def get_dataframe_from_postgres() -> pd.DataFrame:
             -'latitude'(float)
             -'longitude'(float)
     """
-    pg_con = PostgresOperation(database='weather_db',user='ujjwolkhatri',password='password')
+    pg_con = PostgresSource(database='weather_db',user='ujjwolkhatri',password='password')
     query = """
                 select
                     latitude,
@@ -58,6 +61,7 @@ def get_dataframe_from_postgres() -> pd.DataFrame:
             """
     df= pg_con.query_postgres(query_string=query)
     return df
+
 
 # Helper
 def make_hash(row):
@@ -68,13 +72,9 @@ def make_hash(row):
 def api_url(df) -> list[str]:
     """
     --This function make the list of copmlete urls to request the APIs
-
     Args: dataframe
-
     Return: urls (list)
-    
     """
-
     """
     APIs doc: https://openweathermap.org/api/one-call-api
     """
@@ -87,7 +87,6 @@ def api_url(df) -> list[str]:
         url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}"
         final_url = url + apiKey
         ll_url.append(final_url)
-
     suffel = random.sample(ll_url, len(ll_url))
     return suffel
 
@@ -109,6 +108,10 @@ def check_data_types(df):
 
 
 def traform_data(df):
+    """This function takes dataframe before loading into postgres
+    Creates unique key by combining id and coord column
+    Adds _record_loaded_at column with current timestamp
+    Adds rain and snow column with null value"""
     df= df.copy()
     df["unique_key"] = df.apply(make_hash, axis=1)
     df["_record_loaded_at"] = datetime.now()
@@ -117,6 +120,7 @@ def traform_data(df):
     df = df.drop_duplicates(subset='unique_key', keep='last')   
 
     return df
+
 
 def chunk_url(ll_url, size):
     """
@@ -137,6 +141,7 @@ def fetch(url):
     """
     response = requests.get(url).json()
     return response
+
 
 # Database Operation
 def merge_data():
@@ -181,7 +186,7 @@ def merge_data():
     """))
    
     return response
-    
+
 
 def load_country_city_to_postgres(df):
     pg_conn = PostgresDestination(database='weather_db',user='ujjwolkhatri',password='password')
@@ -193,7 +198,6 @@ if __name__ == "__main__":
    
     city_name_df=cities_detail()
     load_status = load_country_city_to_postgres(df=city_name_df)
-
 
     df= get_dataframe_from_postgres()  
     url=api_url(df)
@@ -215,8 +219,3 @@ if __name__ == "__main__":
                 pg_connD.load_to_table(df=df,table_name='weather_data',if_exists='replace')
 
             pg_connO.delete_table(table_name='temp_table',schema_name='weather_schema')
-
-
-
-
-           

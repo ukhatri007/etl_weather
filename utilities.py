@@ -1,6 +1,6 @@
-from sqlalchemy import create_engine, text
-import pandas as pd
 from dataclasses import dataclass
+import pandas as pd
+from sqlalchemy import create_engine, text
 
 @dataclass
 class PostgresConnection:
@@ -28,11 +28,6 @@ class PostgresOperation:
     def __post_init__(self):
         pg_conn = PostgresConnection(database=self.database, user=self.user, password=self.password)
         self.pg_engine = pg_conn.create_conn()
-
-
-    def query_postgres(self, query_string):
-        df= pd.read_sql_query(query_string, self.pg_engine)
-        return df
 
 
     def check_if_table_exists(self, table_name: str,schema_name:str):
@@ -91,8 +86,6 @@ class PostgresSource():
     """
     This class is responsible for fetching data from the PostgreSQL database.
     """
-    query_string:str
-
     database: str
     user: str
     password: str
@@ -105,5 +98,3 @@ class PostgresSource():
     def query_postgres(self, query_string):
         df= pd.read_sql_query(query_string, self.pg_engine)
         return df
-    
-    
