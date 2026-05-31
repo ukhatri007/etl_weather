@@ -2,15 +2,11 @@ from sqlalchemy import create_engine, text
 import pandas as pd
 from dataclasses import dataclass
 
-
-class Test:
-    def __init__(self, database: str, user: str, password: str):
-        self.database = database
-        self.user = user
-        self.password = password
-
 @dataclass
 class PostgresConnection:
+    """
+    This class is responsible for creating a connection to the PostgreSQL database.
+    """
     database:str
     user:str
     password:str 
@@ -22,6 +18,9 @@ class PostgresConnection:
 
 @dataclass
 class PostgresOperation:
+    """
+    This class is responsible for performing operations on the PostgreSQL database.
+    """
     database: str
     user: str
     password: str
@@ -64,6 +63,9 @@ class PostgresOperation:
 
 @dataclass
 class PostgresDestination():
+    """
+    This class is responsible for loading data to the PostgreSQL database.
+    """
     database: str
     user: str
     password: str
@@ -86,6 +88,9 @@ class PostgresDestination():
 
 
 class PostgresSource():
+    """
+    This class is responsible for fetching data from the PostgreSQL database.
+    """
     query_string:str
 
     database: str
@@ -100,3 +105,5 @@ class PostgresSource():
     def query_postgres(self, query_string):
         df= pd.read_sql_query(query_string, self.pg_engine)
         return df
+    
+    
