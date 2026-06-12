@@ -106,7 +106,7 @@ def transform_data(df) -> pd.DataFrame:
     df["RAIN"] = None
     df["UNIQUE_KEY"] = df.apply(make_hash, axis=1)
     df = df.drop_duplicates(subset="UNIQUE_KEY", keep="last")
-    df["_CREATED_AT"] = datetime.now()
+    df["_CREATED_AT"] = datetime.now(timezone.utc)
     df = df.reset_index(drop=True)
     return df
 
