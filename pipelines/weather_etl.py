@@ -2,7 +2,7 @@ import hashlib
 import json
 import pandas as pd
 import requests
-from datetime import datetime
+from datetime import datetime,timezone
 from countrystatecity_countries import (
     get_cities_of_country,
     get_countries,

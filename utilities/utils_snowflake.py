@@ -56,6 +56,7 @@ class SnowflakeDestination:
             schema=schema_name,
             auto_create_table=True,
             overwrite=False,
+            use_logical_type=True 
         )
         print(
             f"Data loaded into Snowflake table: {table_name}\nSuccess: {success}\nNumber of rows: {nrows}\nNumber of chunks: {nchunks}"
