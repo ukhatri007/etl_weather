@@ -98,9 +98,9 @@ def make_hash(row):
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def transform_data(df) -> pd.DataFrame:
+def transform_data(dataframe) -> pd.DataFrame:
     """function"""
-    df = df.copy()
+    df = dataframe.copy()
     df.columns = df.columns.str.upper()
     df["SNOW"] = None
     df["RAIN"] = None
@@ -125,8 +125,8 @@ if __name__ == "__main__":
         for chunk in chunk_url(ll_url=df_urls, size=495):
             results = executor.map(fetch, chunk)
             data = list(results)
-            df = pd.DataFrame(data)
-            df = transform_data(df)
+            dataframe = pd.DataFrame(data)
+            df = transform_data(dataframe)
             LoadSnowflake = SnowflakeDestination(
                 database="WEATHER_DB", schema="SCHEMA_WEATHER"
             )

@@ -1,6 +1,10 @@
 from dataclasses import dataclass
 import pandas as pd
 from sqlalchemy import create_engine, text
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 @dataclass
@@ -10,8 +14,8 @@ class PostgresConnection:
     """
 
     database: str
-    user: str
-    password: str
+    user: str = os.getenv("POSTGRES_USER")
+    password: str = os.getenv("POSTGRES_PASSWORD")
 
     def create_conn(self):
         self.conn = create_engine(
@@ -29,8 +33,8 @@ class PostgresOperation:
     """
 
     database: str
-    user: str
-    password: str
+    user: str = os.getenv("POSTGRES_USER")
+    password: str = os.getenv("POSTGRES_PASSWORD")
 
     def __post_init__(self):
         """"""
@@ -73,8 +77,8 @@ class PostgresDestination:
     """
 
     database: str
-    user: str
-    password: str
+    user: str = os.getenv("POSTGRES_USER")
+    password: str = os.getenv("POSTGRES_PASSWORD")
 
     def __post_init__(self):
         pg_conn = PostgresConnection(
@@ -103,8 +107,8 @@ class PostgresSource:
     """
 
     database: str
-    user: str
-    password: str
+    user: str = os.getenv("POSTGRES_USER")
+    password: str = os.getenv("POSTGRES_PASSWORD")
 
     def __post_init__(self):
         pg_conn = PostgresConnection(

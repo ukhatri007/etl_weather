@@ -108,12 +108,14 @@ def check_data_types(df):
     return df
 
 
-def traform_data(df):
+def traform_data(dataframe):
     """This function takes dataframe before loading into postgres
     Creates unique key by combining id and coord column
     Adds _record_loaded_at column with current timestamp
     Adds rain and snow column with null value"""
-    df = df.copy()
+    # pandas gets confued to use memory with orginal df or not which gives warning
+    # so df.copy() solve this warning problem by creating now df
+    df = dataframe.copy()
     df["unique_key"] = df.apply(make_hash, axis=1)
     df["_record_loaded_at"] = datetime.now()
     df["rain"] = None
@@ -214,15 +216,15 @@ if __name__ == "__main__":
             data = list(results)
             df = pd.DataFrame(data)
             df = check_data_types(df=df)
-            df = traform_data(df=df)
+            df = traform_data(dataframe=df)
             pg_connO = PostgresOperation(
-                database="weather_db", user="ujjwolkhatri", password="password"
+                database="weather_db"
             )
             check_table = pg_connO.check_if_table_exists(
                 table_name="weather_data", schema_name="weather_schema"
             )
             pg_connD = PostgresDestination(
-                database="weather_db", user="ujjwolkhatri", password="password"
+                database="weather_db"
             )
             if check_table:
                 pg_connD.load_to_table(df=df, table_name="temp_table", if_exists="replace")
