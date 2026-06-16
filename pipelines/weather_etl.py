@@ -105,8 +105,9 @@ def transform_data(dataframe) -> pd.DataFrame:
     df["SNOW"] = None
     df["RAIN"] = None
     df["UNIQUE_KEY"] = df.apply(make_hash, axis=1)
-    df = df.drop_duplicates(subset="UNIQUE_KEY", keep="last")
     df["_CREATED_AT"] = datetime.now(timezone.utc)
+    df= df.sort_values("_CREATED_AT")
+    df = df.drop_duplicates(subset="UNIQUE_KEY", keep="last")
     df = df.reset_index(drop=True)
     return df
 
@@ -127,7 +128,7 @@ if __name__ == "__main__":
             data = list(results)
             dataframe = pd.DataFrame(data)
             df = transform_data(dataframe)
-            LoadSnowflake = SnowflakeDestination(
+            conn_des = SnowflakeDestination(
                 database="WEATHER_DB", schema="SCHEMA_WEATHER"
             )
-            LoadSnowflake.load_into_snowflake(df, "WEATHER_API_DATA", "SCHEMA_WEATHER")
+            conn_des.load_into_snowflake(df, "WEATHER_API_DATA", "SCHEMA_WEATHER")

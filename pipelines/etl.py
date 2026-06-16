@@ -120,6 +120,7 @@ def traform_data(dataframe):
     df["_record_loaded_at"] = datetime.now()
     df["rain"] = None
     df["snow"] = None
+    df=df.sort_values("_record_loaded_at")
     df = df.drop_duplicates(subset="unique_key", keep="last")
 
     return df
@@ -217,19 +218,19 @@ if __name__ == "__main__":
             df = pd.DataFrame(data)
             df = check_data_types(df=df)
             df = traform_data(dataframe=df)
-            pg_connO = PostgresOperation(
+            pg_conn_ope = PostgresOperation(
                 database="weather_db"
             )
-            check_table = pg_connO.check_if_table_exists(
+            check_table = pg_conn_ope.check_if_table_exists(
                 table_name="weather_data", schema_name="weather_schema"
             )
-            pg_connD = PostgresDestination(
+            pg_conn_des = PostgresDestination(
                 database="weather_db"
             )
             if check_table:
-                pg_connD.load_to_table(df=df, table_name="temp_table", if_exists="replace")
+                pg_conn_des.load_to_table(df=df, table_name="temp_table", if_exists="replace")
                 merge_data()
             else:
-                pg_connD.load_to_table(df=df, table_name="weather_data", if_exists="replace")
+                pg_conn_des.load_to_table(df=df, table_name="weather_data", if_exists="replace")
 
-            pg_connO.delete_table(table_name="temp_table", schema_name="weather_schema")
+            pg_conn_des.delete_table(table_name="temp_table", schema_name="weather_schema")
