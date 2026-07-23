@@ -47,7 +47,7 @@ def get_cities_coordinates(schema_name: str, table_name: str) -> pd.DataFrame:
     """
     conn = SnowflakeOperation(database="WEATHER_DB", schema="SCHEMA_WEATHER")
     query = f"""
-                SELECT * FROM {schema_name}.{table_name} limit 2000;
+                SELECT * FROM {schema_name}.{table_name};
             """
     df = conn.query_df(query_string=query)
     return df
@@ -98,15 +98,16 @@ def make_hash(row):
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def transform_data(df) -> pd.DataFrame:
+def transform_data(dataframe) -> pd.DataFrame:
     """function"""
-    df = df.copy()
+    df = dataframe.copy()
     df.columns = df.columns.str.upper()
     df["SNOW"] = None
     df["RAIN"] = None
     df["UNIQUE_KEY"] = df.apply(make_hash, axis=1)
-    df = df.drop_duplicates(subset="UNIQUE_KEY", keep="last")
     df["_CREATED_AT"] = datetime.now(timezone.utc)
+    df= df.sort_values("_CREATED_AT")
+    df = df.drop_duplicates(subset="UNIQUE_KEY", keep="last")
     df = df.reset_index(drop=True)
     return df
 
@@ -125,9 +126,9 @@ if __name__ == "__main__":
         for chunk in chunk_url(ll_url=df_urls, size=495):
             results = executor.map(fetch, chunk)
             data = list(results)
-            df = pd.DataFrame(data)
-            df = transform_data(df)
-            LoadSnowflake = SnowflakeDestination(
+            dataframe = pd.DataFrame(data)
+            df = transform_data(dataframe)
+            conn_des = SnowflakeDestination(
                 database="WEATHER_DB", schema="SCHEMA_WEATHER"
             )
-            LoadSnowflake.load_into_snowflake(df, "WEATHER_API_DATA", "SCHEMA_WEATHER")
+            conn_des.load_into_snowflake(df, "WEATHER_API_DATA", "SCHEMA_WEATHER")
