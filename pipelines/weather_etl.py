@@ -47,7 +47,7 @@ def get_cities_coordinates(schema_name: str, table_name: str) -> pd.DataFrame:
     """
     conn = SnowflakeOperation(database="WEATHER_DB", schema="SCHEMA_WEATHER")
     query = f"""
-                SELECT * FROM {schema_name}.{table_name} limit 2000;
+                SELECT * FROM {schema_name}.{table_name};
             """
     df = conn.query_df(query_string=query)
     return df
