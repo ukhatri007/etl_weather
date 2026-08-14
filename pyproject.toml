@@ -11,11 +11,14 @@ requires-python = ">=3.12"
 authors = [
   {name = "UJJWOL KC"}
 ]
+dependencies = [
+    
+]
 
 
 [dependency-groups]
 dev = [
-    "pandas>=2.1.2,<3.0.0", 
+    "pandas==2.2.3",
     "psycopg2==2.9.11", 
     "sqlalchemy==2.0.48", 
     "requests==2.32.5", 

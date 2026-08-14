@@ -1,218 +1,174 @@
-# PostgreSQL Utility Package
+# ETL Weather Data Pipeline
 
-A lightweight PostgreSQL utility package built using Python dataclasses and SQLAlchemy for database connections, querying, loading data, and managing tables.
+## Project Title
 
-## Features
-
-* Create PostgreSQL database connections
-* Execute SQL queries and fetch results into Pandas DataFrames
-* Load Pandas DataFrames into PostgreSQL tables
-* Check whether tables exist
-* Delete tables dynamically
-* Organized using dataclasses for cleaner code structure
+**ETL Weather Data Pipeline** - Two independent Python ETL pipelines that fetch weather data and load it into PostgreSQL and Snowflake
 
 ---
 
-# Project Structure
+## Project Overview
 
-```text
-project/
-│
-├── postgres_utils.py
-├── README.md
-└── requirements.txt
-```
+This project contains two separate ETL pipelines - one that loads weather data into PostgreSQL and another that loads weather data into Snowflake. Both pipelines fetch city and country data using the countrystatecity-countries library, generate API endpoints using latitude and longitude coordinates, call the OpenWeatherMap API to retrieve weather data, transform the data, and load it into their respective database destinations.
 
 ---
 
-# Installation
+## Project Architecture / Data Flow
 
-Install required dependencies:
+**Pipeline 1 - PostgreSQL:**
+Extract city data → Load to PostgreSQL → Query coordinates from PostgreSQL → Generate API URLs → Fetch weather data via API → Transform data → Load to PostgreSQL
 
-```bash
-pip install pandas sqlalchemy psycopg2-binary
-```
+**Pipeline 2 - Snowflake:**
+Extract city data → Load to Snowflake → Query coordinates from Snowflake → Generate API URLs → Fetch weather data via API → Transform data → Load to Snowflake
 
-or using uv:
+![ data flow Architecture](images/flow_architecture.png)
+---
 
-```bash
-uv pip install pandas sqlalchemy psycopg2-binary
-```
+## Technology Stack
+
+| Component | Technology |
+|-----------|-----------|
+| **Language** | Python 3.12+ |
+| **Package Manager** | UV |
+| **Data Processing** | Pandas |
+| **Database Connection (PostgreSQL)** | SQLAlchemy, psycopg2 |
+| **Database Connection (Snowflake)** | snowflake-connector-python |
+| **Code Organization** | Python Dataclasses |
+| **Environment Variables** | python-dotenv |
+| **HTTP Requests** | Requests |
+| **Concurrency** | ThreadPoolExecutor |
+| **Cities Data** | countrystatecity-countries library |
 
 ---
 
-# Classes Overview
+## Source Data
 
-## 1. PostgresConnection
+**Data Source:** OpenWeatherMap API using coordinates
 
-Responsible for creating a PostgreSQL database connection.
+**Data Extraction Process:**
+- Uses countrystatecity-countries library to get all countries
+- Uses countrystatecity-countries library to get all cities for each country (with latitude and longitude)
+- Generates OpenWeatherMap API URLs using latitude and longitude coordinates
+- Fetches real-time weather data from API endpoints
 
-### Parameters
-
-| Parameter | Type | Description         |
-| --------- | ---- | ------------------- |
-| database  | str  | Database name       |
-| user      | str  | PostgreSQL username |
-| password  | str  | PostgreSQL password |
-
-### Example
-
-```python
-from postgres_utils import PostgresConnection
-
-conn = PostgresConnection(
-    database="weather_db",
-    user="postgres",
-    password="password"
-)
-
-engine = conn.create_conn()
-```
+**API Response Data:** The pipeline receives weather data in JSON format from the OpenWeatherMap API
 
 ---
 
-## 2. PostgresOperation
+## Data Transformation
 
-Handles database operations such as:
+**Transformation Steps:**
 
-* Checking table existence
-* Dropping tables
+1. **Hash Generation:** Creates a SHA-256 hash from the ID and coordinates to create a unique key for each record
+2. **Data Type Handling:** Converts complex data types (dictionaries, lists) to JSON strings
+3. **Null Initialization:** Adds rain and snow columns with null values
+4. **Column Standardization:** Converts column names to uppercase (for Snowflake)
+5. **Timestamp Addition:** Adds a timestamp for when the record was created
+6. **Sorting:** Sorts data by timestamp
+7. **Deduplication:** Removes duplicate records based on unique_key, keeping only the latest record
 
-### Example
-
-```python
-from postgres_utils import PostgresOperation
-
-pg_ops = PostgresOperation(
-    database="weather_db",
-    user="postgres",
-    password="password"
-)
-
-exists = pg_ops.check_if_table_exists(
-    table_name="weather_data",
-    schema_name="weather_schema"
-)
-
-print(exists)
-
-pg_ops.delete_table(
-    table_name="weather_data",
-    schema_name="weather_schema"
-)
-```
 
 ---
 
-## 3. PostgresDestination
+## PostgreSQL Destination
 
-Loads Pandas DataFrames into PostgreSQL.
+**Connection Details:**
+- Uses SQLAlchemy with psycopg2 adapter
+- Loads environment variables using python-dotenv
+- Database credentials from .env file: POSTGRES_USER, POSTGRES_PASSWORD
 
-### Example
 
-```python
-import pandas as pd
-from postgres_utils import PostgresDestination
+**Data Loading Strategy:**
+- Checks if weather_data table exists
+- If table exists: loads new data to temp_table, then uses SQL MERGE to update existing records or insert new records
+- If table doesn't exist: creates weather_data table and loads data directly
+- Deletes temp_table after merge operation completes
 
-df = pd.DataFrame({
-    "city": ["Kathmandu"],
-    "temp": [28]
-})
-
-destination = PostgresDestination(
-    database="weather_db",
-    user="postgres",
-    password="password"
-)
-
-destination.load_to_table(
-    df=df,
-    table_name="weather_data",
-    if_exists="append"
-)
-```
+**Database Operations:**
+- PostgresConnection class creates database connection
+- PostgresOperation class checks if tables exist and deletes tables
+- PostgresDestination class loads data to PostgreSQL tables
+- PostgresSource class queries data from PostgreSQL
 
 ---
 
-## 4. PostgresSource
+## Snowflake Destination
 
-Fetches data from PostgreSQL into Pandas DataFrames.
+**Connection Details:**
+- Uses snowflake-connector-python with pandas integration
+- Loads environment variables using python-dotenv
+- Database credentials from .env file: SNOWFLAKE_USER, SNOWFLAKE_PASSWORD, SNOWFLAKE_ACCOUNT, SNOWFLAKE_WAREHOUSE
 
-### Example
 
-```python
-from postgres_utils import PostgresSource
+**Data Loading Strategy:**
+- Auto-creates tables if they don't exist (auto_create_table=True)
+- Appends new data without overwriting existing data (overwrite=False)
+- Uses write_pandas function from snowflake-connector-python for efficient data transfer
 
-source = PostgresSource(
-    database="weather_db",
-    user="postgres",
-    password="password"
-)
-
-df = source.query_postgres(
-    "SELECT * FROM weather_schema.weather_data"
-)
-
-print(df.head())
-```
+**Database Operations:**
+- SnowflakeConnection class creates database connection
+- SnowflakeDestination class loads data into Snowflake tables
+- SnowflakeOperation class queries data from Snowflake
 
 ---
 
-# Database Configuration
+## Prerequisites
 
-Current connection configuration:
+**Python Version:** 3.12 or higher
 
-```text
-Host: localhost
-Port: 5432
-Database: Your Database
-User: Your User
-```
+**Required Environment Variables in .env file:**
+- POSTGRES_USER (for PostgreSQL pipeline)
+- POSTGRES_PASSWORD (for PostgreSQL pipeline)
+- SNOWFLAKE_USER (for Snowflake pipeline)
+- SNOWFLAKE_PASSWORD (for Snowflake pipeline)
+- SNOWFLAKE_ACCOUNT (for Snowflake pipeline)
+- SNOWFLAKE_WAREHOUSE (for Snowflake pipeline)
 
-Connection string format:
-
-```python
-postgresql://USER:PASSWORD@localhost:5432/DATABASE
-```
-
----
-
-# Dependencies
-
-```text
-pandas
-sqlalchemy
-psycopg2-binary
-dataclasses
-```
+**External Credentials:**
+- PostgreSQL database with network access
+- Snowflake account with network access
+- OpenWeatherMap API access
 
 ---
 
-# Future Improvements
+## Installation & Setup
 
-* Add environment variable support
-* Add logging
-* Add exception handling
-* Add configurable host and port
-* Add connection pooling
-* Add unit tests
+**Step 1: Set up dependencies**
+Use UV package manager to install dependencies from pyproject.toml
 
----
+**Step 2: Create .env file**
+Create a .env file in the project root with your database and API credentials
 
-# Notes
-
-* `load_to_table()` currently loads into:
-
-```text
-weather_schema
-```
-
-* Ensure the schema exists before loading data.
-
-* `delete_table()` permanently removes tables.
+**Step 3: Load environment variables**
+The code uses `from dotenv import load_dotenv` to load credentials from .env file at runtime
 
 ---
+## What I Learned
+- Data Engineering Concepts - ETL vs ELT paradigm, deduplication, incremental loading.
 
-# License
+- Database Technologies - PostgreSQL and Snowflake specifics.
 
-MIT License
+- Python Development - Dataclasses, concurrency, environment variables, error handling.
+
+- External Libraries - pandas, requests, ThreadPoolExecutor, etc.
+
+- API Integration - Endpoint generation, batch processing, concurrent requests
+
+## What I will DO With More Time
+
+- Improve Error Handling & Reliability - Logging, retries, notifications
+
+- Data Quality & Monitoring - Validation, metrics, anomaly detection
+
+- Orchestration & Scheduling - Apache Airflow, scheduling
+
+- Containerization & Deployment - Docker, cloud deployment, CI/CD
+
+
+## Contact
+
+**Feel free to reach me if have any question**
+
+- [LinkIn](https://www.linkedin.com/in/ujjwol-k-c-37519329b/)
+
+- **Email** : kcujjwol1999@gmail.com
+

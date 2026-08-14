@@ -81,14 +81,14 @@ class PostgresDestination:
     password: str = os.getenv("POSTGRES_PASSWORD")
 
     def __post_init__(self):
+
         pg_conn = PostgresConnection(
             database=self.database, user=self.user, password=self.password
         )
         self.pg_engine = pg_conn.create_conn()
 
-    def load_to_table(
-        self, df: pd.DataFrame, table_name: str, if_exists: str = "append"
-    ) -> int:
+    def load_to_table(self, df: pd.DataFrame, table_name: str, if_exists: str = "append") -> int:
+        
         load_response = df.to_sql(
             name=table_name,
             con=self.pg_engine,
@@ -97,6 +97,7 @@ class PostgresDestination:
             index=False,
         )
         print(f"Data loaded to PostgreSQL table: {table_name}")
+        return load_response
 
 
 @dataclass

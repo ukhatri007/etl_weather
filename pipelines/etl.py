@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import random
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -80,7 +81,7 @@ def api_url(df) -> list[str]:
     """
     APIs doc: https://openweathermap.org/api/one-call-api
     """
-    apiKey = "&appid=80e43223a826e62159c409e5395e2c99"
+    apiKey = os.getenv("API_KEY")
     ll_url = []
 
     for row in df.itertuples():
@@ -206,7 +207,9 @@ def load_country_city_to_postgres(df):
 if __name__ == "__main__":
 
     city_name_df = cities_detail()
+    print(city_name_df)
     load_status = load_country_city_to_postgres(df=city_name_df)
+
 
     df = get_dataframe_from_postgres()
     url = api_url(df)

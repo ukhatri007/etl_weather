@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import pandas as pd
 import requests
 from datetime import datetime,timezone
@@ -57,7 +58,7 @@ def create_url(df) -> list:
     """--Generate url from the latitude and longitude using snowflake table--
     Args: dataframe with column latitude and longitude
     Return: list of url"""
-    apiKey = "&appid=80e43223a826e62159c409e5395e2c99"
+    apiKey = os.getenv("API_KEY")
     final_url = []
     for row in df.itertuples():
         latitude = row.LATITUDE
